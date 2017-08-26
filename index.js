@@ -1,10 +1,14 @@
-const needle = require('needle');
 const cheerio = require('cheerio');
 const fs = require('fs');
+const needle = require('needle');
+const path = require('path');
 const {promisify} = require('util');
 
-const URL = 'http://www.koleso-razmer.ru/';
 const getAsync = promisify(needle.get);
+const checkAccess = promisify(fs.access);
+//TODO config
+// const wd = './';
+const URL = 'http://www.koleso-razmer.ru/';
 
 function delayHelper(ms) {
   const d = Date.now() + ms;
@@ -37,7 +41,7 @@ async function getModels(brands) {
       console.log(`${res.statusCode}:${res.statusMessage}`);
       return Object.assign({}, brand, {models: []});
     };
-    $ = cheerio.load(res.body);    
+    const $ = cheerio.load(res.body);    
     const models = $('table li a')
     .map(function() {
       return {
@@ -49,13 +53,71 @@ async function getModels(brands) {
   })
 };
 
+/*строки парсятся в массив вида
+  [год, размер диска, вылет диска, сверловка, размер шин, версия]
+  ф-ия возвращает двумерный массив*/
+function tableParser(table) {
+  const $ = cheerio.load(table),
+        $table = $('#paramstable') || $('table'),
+        $tbody = $table.children('tbody'),
+        $rows = $tbody.children('tr'),
+        result = [];
+  //TODO: side effect?
+  let currentVersion = ''; 
+  $rows.each((index, $tr) => {
+    //выбрасываем загаловки
+    if (index === 0) return;
+
+    const $tdArray = $($tr).children('td');
+    const $contentArray = $tdArray.map((index, $td) => {
+      return $($td).text()
+        .replace(/купить|перед|зад/igm, '')
+        .trim();
+    });
+    //сохраняем версию во внешнюю преременную
+    if ($contentArray.length === 1) {
+      currentVersion = $contentArray[0];
+      return;
+    };
+    
+    const contentArray = [].slice.call($contentArray);
+    contentArray.push(currentVersion);
+    result.push(contentArray);
+  });
+  //к строкам, не содержащим год, добавляем значение из пред. строки
+  result.forEach((row, index, array) => {
+    if (row.length === 5) {
+      row.unshift(array[index - 1][0]);
+    }
+  })
+  return result;
+};
+
+
 // async function saveSizes(brandsWithModels) {
 
 // };
 
 (async function init() {
-  const brands = await getBrands();
-  console.log(brands)
-  const brandsWithModels = await Promise.all(await getModels(brands));
-  console.log(brandsWithModels);
+  fs.readFile(path.resolve(__dirname, 'table-example.html'), 'utf-8', (err, data) => {
+    if (err) throw err;
+    const result = tableParser(data);
+    console.dir(result);
+  });
+  // const brands = await getBrands();
+  // console.log(brands)
+  // const brandsWithModels = await Promise.all(await getModels(brands));
+  // console.log(brandsWithModels);
+
+  // console.log(__dirname);
+  // fs.access(path.resolve(__dirname, 'dir1'), fs.constants.F_OK , async (err) => {
+  //   if (err) {
+  //     return;
+  //   }
+  //   await fs.mkdir(path.resolve(__dirname, 'dir1'));
+  // })
+
+  // console.log(await checkAccess(path.resolve(__dirname, 'dir1')));
+  // await fs.mkdir(path.resolve(__dirname, 'dir1'));
+  // await fs.mkdir(path.resolve(__dirname, 'dir1'));
 })();
