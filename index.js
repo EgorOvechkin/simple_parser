@@ -1,14 +1,35 @@
-const cheerio = require('cheerio');
-const fs = require('fs');
-const needle = require('needle');
-const path = require('path');
-const {promisify} = require('util');
+const cheerio = require('cheerio'),
+      fs = require('fs'),
+      mysql = require('mysql'),
+      needle = require('needle'),
+      path = require('path'),
+      {promisify} = require('util');
 
-const getAsync = promisify(needle.get);
-const checkAccess = promisify(fs.access);
-//TODO config
-// const wd = './';
-const URL = 'http://www.koleso-razmer.ru/';
+//TODO use config
+const URL = 'http://www.koleso-razmer.ru/',
+      db_option = {
+        host: 'localhost',
+        user: 'root',
+        password: '12345'
+      };
+
+//промисифицируем
+const getAsync = promisify(needle.get),
+      checkAccess = promisify(fs.access);
+
+function promisifyAll(exemplar) {
+  const proto = Object.getPrototypeOf(exemplar);
+  const asyncExemplar = Object.create(exemplar);
+  for (let prop in proto) {
+    if (typeof proto[prop] === 'function') {
+      asyncExemplar[`${prop}Async`] = promisify(proto[prop]);
+    }
+  };
+  return asyncExemplar;
+};
+
+const connect = mysql.createConnection(db_option),
+      aConnect = promisifyAll(connect);
 
 function delayHelper(ms) {
   const d = Date.now() + ms;
@@ -97,11 +118,22 @@ function tableParser(tablePage) {
 };
 
 (async function init() {
-  fs.readFile(path.resolve(__dirname, 'table-example.html'), 'utf-8', (err, data) => {
-    if (err) throw err;
-    const result = tableParser(data);
-    console.dir(result);
-  });
+  try {
+    await aConnect.connectAsync;
+    let r = await aConnect.queryAsync('CREATE DATABASE IF NOT EXISTS wheel_sizes');
+    console.log(r)
+    aConnect.destroy();
+  } catch (err) {
+    throw new Error(err);
+  }
+  // con.connect(())
+
+  // fs.readFile(path.resolve(__dirname, 'table-example.html'), 'utf-8', (err, data) => {
+  //   if (err) throw err;
+  //   const result = tableParser(data);
+  //   console.dir(result);
+  // });
+  
   // const brands = await getBrands();
   // console.log(brands)
   // const brandsWithModels = await Promise.all(await getModels(brands));
