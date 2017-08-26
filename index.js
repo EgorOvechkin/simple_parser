@@ -10,7 +10,8 @@ const URL = 'http://www.koleso-razmer.ru/',
       db_option = {
         host: 'localhost',
         user: 'root',
-        password: '12345'
+        password: '12345',
+        database: 'wheel_sizes',
       };
 
 //промисифицируем
@@ -27,7 +28,6 @@ function promisifyAll(exemplar) {
   };
   return asyncExemplar;
 };
-
 const connect = mysql.createConnection(db_option),
       aConnect = promisifyAll(connect);
 
@@ -77,10 +77,10 @@ function getTables(models) {
 
 };
 
-/*строки парсятся в массив вида
+/*строки таблицы парсятся в массив вида
   [год, размер диска, вылет диска, сверловка, размер шин, версия]
   ф-ия возвращает двумерный массив*/
-function tableParser(tablePage) {
+function pageParser(tablePage) {
   const $ = cheerio.load(tablePage),
         $table = $('#paramstable') || $('table'),
         $tbody = $table.children('tbody'),
@@ -117,11 +117,48 @@ function tableParser(tablePage) {
   return result;
 };
 
+///
+class Sql {
+  constructor(tableName) {
+    this.tableName = tableName;
+  }
+
+  createTable() {
+    return `CREATE TABLE ${this.tableName} (` +
+      'id INT, ' + 
+      'model VARCHAR(255), ' + 
+      'year YEAR, ' + 
+      'disk_size VARCHAR(255), ' +
+      'departure INT,' + 
+      'drill VARCHAR(255), ' +
+      'tire_size VARCHAR(255), ' + 
+      'version VARCHAR(255), ' +
+      'PRIMARY KEY (id))'
+  }
+}
+
+class Brand extends Sql {
+  constructor(name) {
+    super(name);
+    this.name = name;
+  }
+  
+
+};
+
+function sqlCreateTable(name) {
+
+};
+
 (async function init() {
   try {
     await aConnect.connectAsync;
     let r = await aConnect.queryAsync('CREATE DATABASE IF NOT EXISTS wheel_sizes');
-    console.log(r)
+    // console.log(r);
+    const brand = new Brand('Test');
+    console.log(brand.createTable())
+    r = await aConnect.queryAsync(brand.createTable());    
+    console.log(r);    
     aConnect.destroy();
   } catch (err) {
     throw new Error(err);
