@@ -34,30 +34,33 @@ async function getBrands() {
 
 async function getModels(brands) {
   return brands.map(async function(brand) {
-    delayHelper(5 + Math.random() * 10);
-    console.log(Date(), ' - send request')
+    delayHelper(50 + Math.random() * 100);
     const res = await getAsync(URL + brand.href.slice(1));
     if (res.statusCode !== 200) {
       console.log(`${res.statusCode}:${res.statusMessage}`);
       return Object.assign({}, brand, {models: []});
     };
-    const $ = cheerio.load(res.body);    
+    const $ = cheerio.load(res.body);
     const models = $('table li a')
-    .map(function() {
-      return {
-        model: $(this).text(),
-        href: $(this).attr('href')
-      }
-    }).get();
+      .map(function() {
+        return {
+          model: $(this).text(),
+          href: $(this).attr('href')
+        }
+      }).get();
     return Object.assign({}, brand, {models});
   })
+};
+
+function getTables(models) {
+
 };
 
 /*строки парсятся в массив вида
   [год, размер диска, вылет диска, сверловка, размер шин, версия]
   ф-ия возвращает двумерный массив*/
-function tableParser(table) {
-  const $ = cheerio.load(table),
+function tableParser(tablePage) {
+  const $ = cheerio.load(tablePage),
         $table = $('#paramstable') || $('table'),
         $tbody = $table.children('tbody'),
         $rows = $tbody.children('tr'),
@@ -92,11 +95,6 @@ function tableParser(table) {
   })
   return result;
 };
-
-
-// async function saveSizes(brandsWithModels) {
-
-// };
 
 (async function init() {
   fs.readFile(path.resolve(__dirname, 'table-example.html'), 'utf-8', (err, data) => {
