@@ -30,6 +30,10 @@ function promisifyAll(exemplar) {
 };
 const connect = mysql.createConnection(db_option),
       aConnect = promisifyAll(connect);
+      aConnect.q = function(query) {
+        console.log(query);
+        this.queryAsync(query);
+      }
 
 function delayHelper(ms) {
   const d = Date.now() + ms;
@@ -153,12 +157,12 @@ function sqlCreateTable(name) {
 (async function init() {
   try {
     await aConnect.connectAsync;
-    let r = await aConnect.queryAsync('CREATE DATABASE IF NOT EXISTS wheel_sizes');
+    let r = await aConnect.q('CREATE DATABASE IF NOT EXISTS wheel_sizes');
     // console.log(r);
     const brand = new Brand('Test');
-    console.log(brand.createTable())
-    r = await aConnect.queryAsync(brand.createTable());    
-    console.log(r);    
+    // console.log(brand.createTable())
+    r = await aConnect.q(brand.createTable());    
+    // console.log(r);    
     aConnect.destroy();
   } catch (err) {
     throw new Error(err);
