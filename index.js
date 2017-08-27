@@ -30,10 +30,10 @@ function promisifyAll(exemplar) {
 };
 const connect = mysql.createConnection(db_option),
       aConnect = promisifyAll(connect);
-      aConnect.q = function(query) {
+      aConnect.q = async function(query) {
         console.log(query);
-        this.queryAsync(query);
-      }
+        return this.queryAsync(query);
+      };
 
 function delayHelper(ms) {
   const d = Date.now() + ms;
@@ -128,16 +128,24 @@ class Sql {
   }
 
   createTable() {
-    return `CREATE TABLE ${this.tableName} (` +
-      'id INT, ' + 
-      'model VARCHAR(255), ' + 
-      'year YEAR, ' + 
+    return `CREATE TABLE IF NOT EXISTS ${this.tableName} (` +
+      'id INT, ' +
+      'brand VARCHAR(255), ' +
+      'model VARCHAR(255), ' +
+      'year YEAR, ' +
       'disk_size VARCHAR(255), ' +
-      'departure INT,' + 
+      'departure INT,' +
       'drill VARCHAR(255), ' +
-      'tire_size VARCHAR(255), ' + 
+      'tire_size VARCHAR(255), ' +
       'version VARCHAR(255), ' +
-      'PRIMARY KEY (id))'
+      'PRIMARY KEY (id))';
+  }
+
+  insertRow(id, model, paramsArray) {
+    return `INSERT INTO ${this.tableName} ` +
+      '(id, brand, model, year, disk_size, departure, drill, tire_size, version) ' +
+      `VALUES (${id}, "${this.tableName}", "${model}", ${paramsArray[0]}, ` +
+      `"${paramsArray[1]}", ${paramsArray[2]}, "${paramsArray[3]}", "${paramsArray[4]}", "${paramsArray[5]}")`
   }
 }
 
@@ -158,11 +166,13 @@ function sqlCreateTable(name) {
   try {
     await aConnect.connectAsync;
     let r = await aConnect.q('CREATE DATABASE IF NOT EXISTS wheel_sizes');
-    // console.log(r);
-    const brand = new Brand('Test');
+    console.log(r);
+    const brand = new Brand('Test1');
     // console.log(brand.createTable())
-    r = await aConnect.q(brand.createTable());    
-    // console.log(r);    
+    r = await aConnect.q(brand.createTable());
+    console.log(r);    
+    r = await aConnect.q(brand.insertRow(0, 'TestModel', ['2000', '13x5.5', '45', '4x100', '155/65R14', 'version']));
+    console.log(r);
     aConnect.destroy();
   } catch (err) {
     throw new Error(err);
