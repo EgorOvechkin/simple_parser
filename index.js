@@ -59,7 +59,7 @@ async function getBrands() {
 
 async function getModels(brands) {
   return brands.map(async function(brand) {
-    delayHelper(50 + Math.random() * 100);
+    // delayHelper(50 + Math.random() * 100);
     const res = await getAsync(URL + brand.href.slice(1));
     if (res.statusCode !== 200) {
       console.log(`${res.statusCode}:${res.statusMessage}`);
@@ -125,6 +125,7 @@ function pageParser(tablePage) {
 class Sql {
   constructor(tableName) {
     this.tableName = tableName;
+    this.id = 0;
   }
 
   createTable() {
@@ -141,64 +142,81 @@ class Sql {
       'PRIMARY KEY (id))';
   }
 
-  insertRow(id, model, paramsArray) {
+  insertRow(model, paramsArray) {
+    this.id++;
     return `INSERT INTO ${this.tableName} ` +
       '(id, brand, model, year, disk_size, departure, drill, tire_size, version) ' +
-      `VALUES (${id}, "${this.tableName}", "${model}", ${paramsArray[0]}, ` +
+      `VALUES (${this.id}, "${this.tableName}", "${model}", ${paramsArray[0]}, ` +
       `"${paramsArray[1]}", ${paramsArray[2]}, "${paramsArray[3]}", "${paramsArray[4]}", "${paramsArray[5]}")`
   }
 }
 
 class Brand extends Sql {
-  constructor(name) {
+  constructor(_name) {
+    const name = _name.trim().replace(/\s|-/gm, '_');
     super(name);
     this.name = name;
   }
-  
-
 };
 
-function sqlCreateTable(name) {
+async function init() {
+  // try {
+    await aConnect.q('CREATE DATABASE IF NOT EXISTS wheel_sizes');
+    const brands = await getBrands();
+    console.log('brands > ', brands);
+    const brandsWithModels = await Promise.all(await getModels(brands));
+    console.log('brandsWithModels > ', brandsWithModels);
 
-};
-
-(async function init() {
-  try {
     await aConnect.connectAsync;
-    let r = await aConnect.q('CREATE DATABASE IF NOT EXISTS wheel_sizes');
-    console.log(r);
-    const brand = new Brand('Test1');
-    // console.log(brand.createTable())
-    r = await aConnect.q(brand.createTable());
-    console.log(r);    
-    r = await aConnect.q(brand.insertRow(0, 'TestModel', ['2000', '13x5.5', '45', '4x100', '155/65R14', 'version']));
-    console.log(r);
+    //создаём таблицы
+    await Promise.all(brandsWithModels.map(async function(brandInfo) {
+      const brand = new Brand(brandInfo.brand);
+      return aConnect.q(brand.createTable());
+    }));
+    //заполняем таблицы
+    await Promise.all(brandsWithModels.map(async function(brandInfo) {
+      // const res = await getAsync(URL + )
+      const brand = new Brand(brandInfo.brand);      
+      return Promise.all(brandInfo.models.map(async function(modelInfo, index) {
+        const res = await getAsync(URL + modelInfo.href.slice(1));
+        if (res.statusCode !== 200) {
+          console.log(`${res.statusCode}:${res.statusMessage}_${URL + modelInfo.href.slice(1)}`);
+          // process.exit(1);
+          return new Promise((resolve, reject) => { resolve() });
+        };
+        const paramsArray = pageParser(res.body);
+        return Promise.all(paramsArray.map((params) => aConnect.q(brand.insertRow(modelInfo.model, params))));
+        // return aConnect.q(brand.insertRow(modelInfo.model, paramsArray));
+      }))
+    }))
+
+    // brandsWithModels.forEach(async function(brandInfo, index, array) {
+    //   const brand = new Brand(brandInfo.brand);
+    //   await aConnect.q(brand.createTable());
+    //   brandInfo.models.forEach(async function(modelInfo, index, array) {
+    //     console.log(modelInfo)
+    //     const res = await getAsync(URL + modelInfo.href.slice(1));
+    //     console.log(res);
+    //     if (res.statusCode !== 200) {
+    //       console.log(`${res.statusCode}:${res.statusMessage}`);
+    //       return;
+    //     };
+    //     const paramsArray = pageParser(res.body);
+    //     await aConnect.q(brand.insertRow(index, modelInfo.model, paramsArray));
+    //   });
+    // });
+
     aConnect.destroy();
-  } catch (err) {
-    throw new Error(err);
-  }
-  // con.connect(())
+  // } catch (err) {
+  //   console.log(err.message);
+  // }
+};
 
-  // fs.readFile(path.resolve(__dirname, 'table-example.html'), 'utf-8', (err, data) => {
-  //   if (err) throw err;
-  //   const result = tableParser(data);
-  //   console.dir(result);
-  // });
-  
-  // const brands = await getBrands();
-  // console.log(brands)
-  // const brandsWithModels = await Promise.all(await getModels(brands));
-  // console.log(brandsWithModels);
+async function test() {
+  fs.readFile('./table-example.html', 'utf-8', (err, data) => {
+    if (err) throw err;
+    console.log(pageParser(data));
+  })
+};
 
-  // console.log(__dirname);
-  // fs.access(path.resolve(__dirname, 'dir1'), fs.constants.F_OK , async (err) => {
-  //   if (err) {
-  //     return;
-  //   }
-  //   await fs.mkdir(path.resolve(__dirname, 'dir1'));
-  // })
-
-  // console.log(await checkAccess(path.resolve(__dirname, 'dir1')));
-  // await fs.mkdir(path.resolve(__dirname, 'dir1'));
-  // await fs.mkdir(path.resolve(__dirname, 'dir1'));
-})();
+init();
