@@ -36,8 +36,11 @@ const connect = mysql.createConnection(db_option),
       };
 
 function delayHelper(ms) {
-  const d = Date.now() + ms;
-  while (Date.now() < d) {};
+  // const d = Date.now() + ms;
+  // while (Date.now() < d) {};
+  return new Promise((res, rej) => {
+    setTimeout(res, ms)
+  });
 };
 
 async function getBrands() {
@@ -146,8 +149,8 @@ class Sql {
     this.id++;
     return `INSERT INTO ${this.tableName} ` +
       '(id, brand, model, year, disk_size, departure, drill, tire_size, version) ' +
-      `VALUES (${this.id}, "${this.tableName}", "${model}", ${paramsArray[0]}, ` +
-      `"${paramsArray[1]}", ${paramsArray[2]}, "${paramsArray[3]}", "${paramsArray[4]}", "${paramsArray[5]}")`
+      `VALUES (${this.id}, "${this.tableName}", "${model}", ${paramsArray[0] || ""}, ` +
+      `"${paramsArray[1] || ""}", ${paramsArray[2] || 0}, "${paramsArray[3] || ""}", "${paramsArray[4] || ""}", "${paramsArray[5] || ""}")`
   }
 }
 
@@ -174,42 +177,47 @@ async function init() {
       return aConnect.q(brand.createTable());
     }));
     //заполняем таблицы
-    await Promise.all(brandsWithModels.map(async function(brandInfo) {
-      // const res = await getAsync(URL + )
-      const brand = new Brand(brandInfo.brand);      
-      return Promise.all(brandInfo.models.map(async function(modelInfo, index) {
-        const res = await getAsync(URL + modelInfo.href.slice(1));
-        if (res.statusCode !== 200) {
-          console.log(`${res.statusCode}:${res.statusMessage}_${URL + modelInfo.href.slice(1)}`);
-          // process.exit(1);
-          return new Promise((resolve, reject) => { resolve() });
-        };
-        const paramsArray = pageParser(res.body);
-        return Promise.all(paramsArray.map((params) => aConnect.q(brand.insertRow(modelInfo.model, params))));
-        // return aConnect.q(brand.insertRow(modelInfo.model, paramsArray));
-      }))
-    }))
+    function insertSizes(brand, model, paramsArray) {
+      let chain = Promise.resolve();
+      paramsArray.forEach(function(params) {
+        chain = chain
+          .then(() => aConnect.q(brand.insertRow(model, params)));
+      });
+      return chain;
+    }
 
-    // brandsWithModels.forEach(async function(brandInfo, index, array) {
-    //   const brand = new Brand(brandInfo.brand);
-    //   await aConnect.q(brand.createTable());
-    //   brandInfo.models.forEach(async function(modelInfo, index, array) {
-    //     console.log(modelInfo)
-    //     const res = await getAsync(URL + modelInfo.href.slice(1));
-    //     console.log(res);
-    //     if (res.statusCode !== 200) {
-    //       console.log(`${res.statusCode}:${res.statusMessage}`);
-    //       return;
-    //     };
-    //     const paramsArray = pageParser(res.body);
-    //     await aConnect.q(brand.insertRow(index, modelInfo.model, paramsArray));
-    //   });
-    // });
+    function getSizes(brandInfo) {
+      const brand = new Brand(brandInfo.brand);
+      let chain = Promise.resolve();
+      brandInfo.models.forEach(function(modelInfo) {
+        chain = chain
+          .then(() => getAsync(URL + modelInfo.href.slice(1)))
+          .then(function (res) {
+            if (res.statusCode !== 200) {
+              console.log(`${res.statusCode}:${res.statusMessage}_${URL + modelInfo.href.slice(1)}`);
+              throw new Error(res.statusMessage)
+            }
+            return pageParser(res.body);
+          })
+          .then((paramsArray) => insertSizes(brand, modelInfo.model, paramsArray))
+          .catch(err => console.log(err));
+      });
+      return chain;
+    };
 
-    aConnect.destroy();
-  // } catch (err) {
-  //   console.log(err.message);
-  // }
+    let chain = Promise.resolve();
+    
+
+    brandsWithModels.forEach(function (brandInfo, index) {
+      chain = chain
+        .then(() => getSizes(brandInfo))
+    });
+
+    chain.then(() => {
+      console.log('OK');
+      aConnect.destroy();
+    });
+
 };
 
 async function test() {
@@ -219,4 +227,4 @@ async function test() {
   })
 };
 
-init();
+test();
