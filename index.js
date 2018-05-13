@@ -1,62 +1,61 @@
-const cheerio = require('cheerio'),
-      fs = require('fs'),
-      mysql = require('mysql'),
-      needle = require('needle'),
-      path = require('path'),
-      {promisify} = require('util');
-
-//TODO use config
-const URL = 'http://www.koleso-razmer.ru/',
-      db_option = {
-        host: 'localhost',
-        user: 'root',
-        password: '12345',
-        database: 'wheel_sizes',
-      };
-
-//промисифицируем
-const getAsync = promisify(needle.get),
-      checkAccess = promisify(fs.access);
+const
+  cheerio = require('cheerio'),
+  fs = require('fs'),
+  needle = require('needle'),
+  path = require('path'),
+  {promisify} = require('util'),
+  //TODO use config
+  URL = 'http://www.koleso-razmer.ru/',
+  db_option = {},
+  //промисифицируем
+  getAsync = promisify(needle.get),
+  checkAccess = promisify(fs.access);
 
 function promisifyAll(exemplar) {
-  const proto = Object.getPrototypeOf(exemplar);
-  const asyncExemplar = Object.create(exemplar);
+  const
+    proto = Object.getPrototypeOf(exemplar),
+    asyncExemplar = Object.create(exemplar);
+
   for (let prop in proto) {
     if (typeof proto[prop] === 'function') {
       asyncExemplar[`${prop}Async`] = promisify(proto[prop]);
     }
   };
+
   return asyncExemplar;
 };
-const connect = mysql.createConnection(db_option),
-      aConnect = promisifyAll(connect);
-      aConnect.q = async function(query) {
-        console.log(query);
-        return this.queryAsync(query);
-      };
 
-function delayHelper(ms) {
-  // const d = Date.now() + ms;
-  // while (Date.now() < d) {};
-  return new Promise((res, rej) => {
-    setTimeout(res, ms)
-  });
-};
+// const connect = mysql.createConnection(db_option),
+//       aConnect = promisifyAll(connect);
+//       aConnect.q = async function(query) {
+//         console.log(query);
+//         return this.queryAsync(query);
+//       };
+
+// function delayHelper(ms) {
+//   // const d = Date.now() + ms;
+//   // while (Date.now() < d) {};
+//   return new Promise((res, rej) => {
+//     setTimeout(res, ms)
+//   });
+// };
 
 async function getBrands() {
   const res = await getAsync(URL);
+
   if (res.statusCode !== 200) {
     console.log(`${res.statusCode}:${res.statusMessage}`);
     return []
   }
+
   const $ = cheerio.load(res.body);
-  const brands = $('table.cols5 li a')
-    .map(function() {
-      return {
-        brand: $(this).text(),
-        href: $(this).attr('href')
-      }
-    }).get();
+  const brands = $('table.cols5 li a').map(function() {
+    return {
+      brand: $(this).text(), 
+      href: $(this).attr('href')
+    }
+  }).get();
+
   return brands;
 };
 
@@ -96,7 +95,7 @@ function pageParser(tablePage) {
   //TODO: side effect?
   let currentVersion = ''; 
   $rows.each((index, $tr) => {
-    //выбрасываем загаловки
+    //выбрасываем заголовки
     if (index === 0) return;
 
     const $tdArray = $($tr).children('td');
@@ -227,4 +226,6 @@ async function test() {
   })
 };
 
-test();
+(async () => {
+  console.log(await getBrands());
+})();
